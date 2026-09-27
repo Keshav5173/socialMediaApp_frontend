@@ -1,22 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-/*
-  Auth pages styled in a warm, editorial tone:
-  cream background, terracotta accent, serif display type.
-
-  Usage (in your router):
-    import { Login, Signup } from "./AuthPages";
-
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Signup />} />
-    </Routes>
-
-  Tailwind config needs no special setup — only class names from
-  the default palette are used, plus a couple of arbitrary values
-  for the exact accent color (#D97757) and cream (#F4F1EA).
-*/
 
 function AuthShell({ eyebrow, title, subtitle, children, footer }) {
   return (

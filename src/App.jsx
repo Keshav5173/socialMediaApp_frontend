@@ -8,7 +8,6 @@ import CreatePost from './pages/createPost.jsx';
 
 function App() {
   
-
   return (
     <>
       <Routes>
