@@ -1,19 +1,34 @@
-# React + Vite
+# Frontend — Creator Contest Platform (User App)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React client for the User Service. Handles signup/login, profile/residency setup, post creation, and the social feed — consuming the User Service's REST API.
 
-Currently, two official plugins are available:
+## Tech Stack
+- **Framework:** React (Vite)
+- **Styling:** Tailwind CSS
+- **HTTP:** Axios (or fetch) against the User Service API
+- **Routing:** React Router
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
+- Signup / login, with JWT-based session handling (access + refresh token flow against the User Service)
+- Profile setup, including setting residency (state/city) — required for contest eligibility
+- Create post with real file upload, client-side type/size validation, and a preview before submitting
+- Feed view: paginated/randomized post list with like counts and per-post "already liked" state
+- Like and comment on posts, with optimistic/idempotent like handling matching the backend
+- Contest leaderboard views for the 5 live categories exposed by the User Service (Top Creators, Most Liked Post, Most Commented Post, Most Active User, Most Active Contributor)
 
-## React Compiler
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+## Running Locally
+```bash
+npm install
+npm run dev
+```
 
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
+## Build
+```bash
+npm run build
+npm run preview
+```
 
-## Expanding the ESLint configuration
+## Live Deployment
+Deployed alongside the User Service on the same AWS EC2 instance: `http://65.2.69.203`
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
