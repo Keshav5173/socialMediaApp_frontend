@@ -1,24 +1,28 @@
-// src/components/ProtectedRoute.jsx
-import { Navigate, Outlet } from 'react-router-dom';
-import { getAccessToken, getRefreshToken, refreshAccessToken } from '../services/auth.services';
+import { useEffect, useState } from "react";
+import { Navigate, Outlet } from "react-router-dom";
+import { getAccessToken, getRefreshToken, refreshAccessToken, clearTokens } from "../services/auth.services";
 
 function ProtectedRoute() {
-  const accessToken = getAccessToken();
-  const refreshToken = getRefreshToken();
+  const [status, setStatus] = useState(() =>
+    getAccessToken() ? "ok" : getRefreshToken() ? "refreshing" : "denied"
+  );
 
-  // No tokens at all — not logged in, send to login
-  if (!accessToken && !refreshToken) {
-    return <Navigate to="/login" replace />;
-  }
-  if(!accessToken){
-    const newAccessToken = refreshAccessToken();
+  useEffect(() => {
+    if (status !== "refreshing") return;
+    let cancelled = false;
 
-    if(!newAccessToken){
-      return <Navigate to="/login" replace />;
-    }
-  }
+    refreshAccessToken()
+      .then(() => !cancelled && setStatus("ok"))
+      .catch(() => {
+        clearTokens();
+        if (!cancelled) setStatus("denied");
+      });
 
-  
+    return () => { cancelled = true; };
+  }, [status]);
+
+  if (status === "refreshing") return null;
+  if (status === "denied") return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
