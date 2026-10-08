@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import emiloLogo from "../assets/emiloLogo.png";
+import connectoLogo from "../assets/connectoLogo.png";
 import profileLogo from "../assets/profileLogo.webp";
 import api, { logout } from "../services/auth.services";
 import { loadPosts } from "../services/post.services.js";
@@ -96,7 +97,7 @@ function Dashboard() {
             <div className="w-screen h-screen relative bg-[#F4F1EA]">
 
                 <div className="h-[10vh] w-screen flex items-center justify-between px-10">
-                    <img src={emiloLogo}  alt="" />
+                    <img src={connectoLogo}  alt="" />
 
                     <div className="w-[50%] h-[10vh] flex items-center justify-evenly">
                         <button onClick={handleCreatePostClick} className="cursor-pointer">
