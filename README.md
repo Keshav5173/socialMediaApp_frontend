@@ -1,4 +1,4 @@
-# Frontend — Creator Contest Platform (User App)
+# Frontend — Connecto
 
 React client for the User Service. Handles signup/login, profile/residency setup, post creation, and the social feed — consuming the User Service's REST API.
 
