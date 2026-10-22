@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import emiloLogo from "../assets/emiloLogo.png";
+
 import connectoLogo from "../assets/connectoLogo.png";
 import profileLogo from "../assets/profileLogo.webp";
 import api, { logout } from "../services/auth.services";
@@ -179,7 +179,7 @@ function Dashboard() {
 
                     {!hasMore && (
                         <p className="text-center text-sm text-black/50">
-                            {posts.length === 0 ? "No posts yet." : "You're all caught up."}
+                            {posts.length === 0 ? "No posts yet." : "You have digged all bottom"}
                         </p>
                     )}
 

@@ -81,7 +81,8 @@ export default function PostCard({ post }) {
     const [newComment, setNewComment] = useState("");
     const [posting, setPosting] = useState(false);
     const [postError, setPostError] = useState("");
-    const listRef = useRef(null); // comment list, used to scroll to the newest comment
+    const listRef = useRef(null); 
+    const [isMuted, setIsMuted] = useState(true);
 
     // Optimistic like: update the UI immediately, roll back if the request fails.
     async function handleLike() {
@@ -155,6 +156,18 @@ export default function PostCard({ post }) {
 
     const ownerInitial = owner?.fullName?.[0]?.toUpperCase() || "?";
 
+    const videoRef = useRef(null);
+
+    const handleVideoClick = () => {
+        const video = videoRef.current;
+
+        if (video) {
+            video.play().catch((err) => {
+            console.error("Video playback failed:", err);
+            });
+        }
+    };
+
     return (
         <div className="relative w-full max-w-[420px] mx-auto">
             <div className="rounded-2xl overflow-hidden bg-white border border-black/10 shadow-sm">
@@ -168,12 +181,59 @@ export default function PostCard({ post }) {
 
                 <div className="w-full bg-[#F4F1EA] flex items-center justify-center overflow-hidden">
                     {type === "Video" ? (
-                        <video
-                            src={postFile}
-                            className="w-full h-auto max-h-[525px] object-contain"
-                            controls
-                            playsInline
-                        />
+                        <>                        
+                            <video
+                                ref={videoRef}
+                                onClick={handleVideoClick}
+                                src={postFile}
+                                className="w-full h-auto max-h-[525px] object-contain"
+                                preload="auto"
+                                autoPlay
+                                loop
+                                muted={isMuted}
+                                playsInline
+                                controls={false}
+                            />
+
+
+                            <button
+                                type="button"
+                                onClick={() => setIsMuted((prev) => !prev)}
+                                className="absolute bottom-35 right-4 z-10 rounded-full
+                                            bg-black/60 p-2 text-white hover:bg-black/80
+                                            transition"
+                                aria-label={isMuted ? "Unmute video" : "Mute video"}
+                                >
+                                {isMuted ? (
+                                    // Muted icon
+                                    <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-5 w-5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    >
+                                    <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+                                    <path d="m17 9 5 6m0-6-5 6" />
+                                    </svg>
+                                ) : (
+                                    // Unmuted icon
+                                    <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-5 w-5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    >
+                                    <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+                                    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                                    <path d="M19 5a10 10 0 0 1 0 14" />
+                                    </svg>
+                                )}
+                            </button>
+                        </>
+
+                        
                     ) : (
                         <img
                             src={postFile}
@@ -181,6 +241,10 @@ export default function PostCard({ post }) {
                             className="w-full h-auto max-h-[525px] object-contain"
                         />
                     )}
+
+                    
+                    
+
                 </div>
 
                 {/* actions */}
