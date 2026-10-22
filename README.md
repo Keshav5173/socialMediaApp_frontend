@@ -2,8 +2,6 @@
 
 React client for the Connecto social media platform. Handles signup/login, profile setup, post creation, and the social feed — consuming the User Service's REST API.
 
-> **Built with [Kiro](https://kiro.dev)** — from the first file to the final deployment, every part of this project was developed using Kiro, an AI-powered development environment.
-
 ## Tech Stack
 
 - **Framework:** React 19 (Vite)
