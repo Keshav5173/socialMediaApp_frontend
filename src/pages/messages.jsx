@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, UserPlus, Phone, Video, Send, X, MessageCircle, ArrowLeft } from 'lucide-react';
 import { connectWebSocket } from '../services/ws.services.js';
+import * as messageApi from '../services/messages.services.js';
 
 function Messages() {
     /* ---------------------------------------------------------------------- */
     /*  STATE – these variables are what the UI displays.                     */
-    /*  Fill them from your backend functions below.                          */
     /* ---------------------------------------------------------------------- */
 
     // Friend list. Each item: { id, name, username, lastMessage, time, unread }
@@ -27,36 +27,94 @@ function Messages() {
     const [userQuery, setUserQuery] = useState('');
     const [searching, setSearching] = useState(false);
 
+    /* ---------------------------------------------------------------------- */
+    /*  REFS                                                                  */
+    /* ---------------------------------------------------------------------- */
+
     const bottomRef = useRef(null);
+    const socketRef = useRef(null);
+    // The socket listener runs once, so it reads the open chat from this ref
+    const activeIdRef = useRef(null);
+    // Same idea: lets the socket listener see the latest friend list
+    const friendsRef = useRef([]);
 
     /* ---------------------------------------------------------------------- */
-    /*  BACKEND FUNCTIONS – add your logic inside each one                    */
+    /*  BACKEND FUNCTIONS                                                     */
     /* ---------------------------------------------------------------------- */
 
-    // Load the logged-in user's friends, then call setFriends(data)
-    const fetchFriends = async () => {
-        // TODO: your backend logic here
+    const formatTime = (date) =>
+        date
+            ? new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+            : '';
+
+    // Updates preview text + time in the friend list, bumps unread, moves chat to top
+    const updateFriendPreview = (friendId, text, time, isIncoming) => {
+        setFriends((prev) => {
+            const target = prev.find((f) => f.id === friendId);
+            if (!target) return prev;
+
+            const updated = {
+                ...target,
+                lastMessage: text,
+                time,
+                unread:
+                    isIncoming && friendId !== activeIdRef.current ? (target.unread || 0) + 1 : target.unread,
+            };
+            return [updated, ...prev.filter((f) => f.id !== friendId)];
+        });
     };
 
-    // Load the chat history with one friend, then call:
-    // setChats((prev) => ({ ...prev, [friendId]: data }))
-    const fetchMessages = async (friendId) => {
-        // TODO: your backend logic here
+    const fetchFriendsList = async () => {
+        try {
+            const data = await messageApi.fetchFriends();
+            setFriends(data.map((f) => ({ ...f, time: formatTime(f.time) })));
+        } catch (err) {
+            console.error(err);
+        }
     };
 
-    // Search users by username, then call setUserResults(data)
-    const searchUsersByUsername = async (query) => {
-        // TODO: your backend logic here
+    const fetchPrevMessages = async (friendId) => {
+        try {
+            const data = await messageApi.fetchMessages(friendId);
+            const formatted = data.map((m) => ({ ...m, time: formatTime(m.time) }));
+            setChats((prev) => ({ ...prev, [friendId]: formatted }));
+        } catch (err) {
+            console.error(err);
+        }
     };
 
-    // Add the selected user as a friend, then refresh the list (setFriends or fetchFriends)
-    const addFriend = async (user) => {
-        // TODO: your backend logic here
+    // No try/catch here: the debounced search effect handles errors
+    const searchUser = async (query) => {
+        const data = await messageApi.searchUsersByUsername(query);
+        setUserResults(data);
     };
 
-    // Send the message in `text` to the active friend (activeId), then update setChats / setFriends
+    const addFriendList = async (user) => {
+    try {
+        await messageApi.addFriend(user.id);
+        await fetchFriendsList();
+    } catch (err) {
+        console.error(err);
+    }
+};
+
+    // Sends through the socket; the backend saves it and replies via the ack callback
     const sendMessage = async (text) => {
-        // TODO: your backend logic here
+        const friendId = activeId; // remember which chat this message belongs to
+
+        socketRef.current?.emit('sendMessage', { friendId, text }, (res) => {
+            if (!res?.success) {
+                console.error(res?.message);
+                return;
+            }
+            const time = formatTime(res.data.time);
+
+            setChats((prev) => ({
+                ...prev,
+                [friendId]: [...(prev[friendId] || []), { id: res.data.id, from: 'me', text: res.data.text, time }],
+            }));
+            updateFriendPreview(friendId, res.data.text, time, false);
+        });
     };
 
     /* ---------------------------------------------------------------------- */
@@ -126,7 +184,7 @@ function Messages() {
     };
 
     const handleAddFriend = async (user) => {
-        await addFriend(user);
+        await addFriendList(user);
         closeAddModal();
     };
 
@@ -138,37 +196,70 @@ function Messages() {
     };
 
     /* ---------------------------------------------------------------------- */
-    /*  USEEFFECTS                                                               */
+    /*  USE EFFECTS                                                           */
     /* ---------------------------------------------------------------------- */
 
-
-
-    // SETUP WEBSOCKET CONNECTION
-
-    const socketRef = useRef(null);
-
+    // WebSocket: connect once when the page opens, listen for incoming messages
     useEffect(() => {
         const socket = connectWebSocket();
         socketRef.current = socket;
 
-        socket.on("connect", () => console.log("connected", socket.id));
-        socket.on("connect_error", (err) => console.log("socket error:", err.message));
+        socket.on('connect', () => console.log('connected', socket.id));
+        socket.on('connect_error', (err) => console.log('socket error:', err.message));
+
+        // Someone added me: show them in my list instantly
+        socket.on('friendAdded', (newFriend) => {
+            setFriends((prev) =>
+                prev.some((f) => f.id === newFriend.id)
+                    ? prev
+                    : [{ ...newFriend, time: formatTime(newFriend.time) }, ...prev]
+            );
+        });
+
+        socket.on('receiveMessage', (data) => {
+            // sender isn't in my list yet -> reload the list from the server
+            if (!friendsRef.current.some((f) => f.id === data.friendId)) {
+                fetchFriendsList();
+            }
+
+            const time = formatTime(data.time);
+
+            // add to that friend's chat
+            setChats((prev) => ({
+                ...prev,
+                [data.friendId]: [
+                    ...(prev[data.friendId] || []),
+                    { id: data.id, from: 'friend', text: data.text, time },
+                ],
+            }));
+
+            // update the friend list preview + unread badge
+            updateFriendPreview(data.friendId, data.text, time, true);
+        });
 
         return () => {
-            socket.disconnect();  
+            socket.off('receiveMessage');
+            socket.off('friendAdded');
+            socket.disconnect();
         };
-    }, []);   
-
-
-    // Load friends and establish websocket when the page opens
-    useEffect(() => {
-        fetchFriends();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Load messages when a friend is selected
+    // Keep the friends ref current for the socket listener
     useEffect(() => {
-        if (activeId) fetchMessages(activeId);
+        friendsRef.current = friends;
+    }, [friends]);
+
+    // Load friends when the page opens
+    useEffect(() => {
+        fetchFriendsList();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // When a friend is selected: keep the ref current and load their messages
+    useEffect(() => {
+        activeIdRef.current = activeId;
+        if (activeId) fetchPrevMessages(activeId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeId]);
 
@@ -187,7 +278,7 @@ function Messages() {
         setSearching(true);
         const timer = setTimeout(async () => {
             try {
-                await searchUsersByUsername(userQuery.trim());
+                await searchUser(userQuery.trim());
             } catch (err) {
                 console.error(err);
                 setUserResults([]);
