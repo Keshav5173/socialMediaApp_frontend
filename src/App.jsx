@@ -4,6 +4,7 @@ import { Login, Signup } from '../src/pages/authPage.jsx';
 import Dashboard from './pages/dashboard.jsx';
 import ProtectedRoute from './pages/procetectedRoute.jsx';
 import CreatePost from './pages/createPost.jsx';
+import Messages from './pages/messages.jsx';
 
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route path='/dashboard' element={<Dashboard />} />
           <Route path='/createpost' element={<CreatePost />} />
+          <Route path='/messages' element={<Messages />} />
         </Route>
       </Routes>
     </>

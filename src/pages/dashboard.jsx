@@ -13,6 +13,9 @@ function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
+    // mobile menu
+    const [menuOpen, setMenuOpen] = useState(false);
+
     // feed
     const [posts, setPosts] = useState([]);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -22,6 +25,13 @@ function Dashboard() {
     const feedRef = useRef(null);      // scroll container (observer root)
     const sentinelRef = useRef(null);  // invisible div at the bottom of the feed
     const inFlightRef = useRef(false); // blocks overlapping requests
+
+    // ---- close mobile menu with Escape ----
+    useEffect(() => {
+        const onKey = (e) => e.key === "Escape" && setMenuOpen(false);
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, []);
 
     // ---- profile ----
     useEffect(() => {
@@ -87,21 +97,30 @@ function Dashboard() {
         return () => observer.disconnect();
     }, [fetchMorePosts, hasMore, postsError]);
 
-
-    const handleCreatePostClick = ()=>{
+    const handleCreatePostClick = () => {
         window.location.href = "/createPost";
+    };
+
+    const handleMessageClick=()=>{
+        console.log("Clickked on messages");
+        window.location.href="/messages";
     }
 
     return (
         <>
-            <div className="w-screen h-screen relative bg-[#F4F1EA]">
+            <div className="w-screen h-screen relative bg-[#F4F1EA] overflow-hidden">
 
-                <div className="h-[10vh] w-screen flex items-center justify-between px-10">
-                    <img className="w-[20vw]" src={connectoLogo}  alt="" />
+                {/* ---------- Header ---------- */}
+                <div className="h-[10vh] w-screen flex items-center justify-between px-4 md:px-10">
+                    <img className="w-[35vw] md:w-[20vw]" src={connectoLogo} alt="" />
 
-                    <div className="w-[50%] h-[10vh] flex items-center justify-evenly">
+                    {/* Desktop nav */}
+                    <div className="hidden md:flex w-[50%] h-[10vh] items-center justify-evenly">
                         <button onClick={handleCreatePostClick} className="cursor-pointer">
                             Create Post
+                        </button>
+                        <button className="cursor-pointer" onClick={handleMessageClick} >
+                            Messages
                         </button>
 
                         <button
@@ -111,10 +130,88 @@ function Dashboard() {
                             <img className="h-[5vh]" src={profileLogo} alt="" />
                         </button>
                     </div>
+
+                    {/* Mobile hamburger */}
+                    <button
+                        className="md:hidden flex flex-col gap-[5px] p-2 cursor-pointer"
+                        onClick={() => setMenuOpen(true)}
+                        aria-label="Open menu"
+                    >
+                        <span className="block h-[2px] w-6 bg-black rounded" />
+                        <span className="block h-[2px] w-6 bg-black rounded" />
+                        <span className="block h-[2px] w-6 bg-black rounded" />
+                    </button>
                 </div>
 
+                {/* ---------- Mobile backdrop ---------- */}
+                <div
+                    onClick={() => setMenuOpen(false)}
+                    className={`md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 ${
+                        menuOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+                    }`}
+                />
+
+                {/* ---------- Mobile slide-in drawer ---------- */}
+                <aside
+                    className={`md:hidden fixed top-0 right-0 h-full w-[75%] max-w-[320px] bg-[#F4F1EA] z-50 shadow-xl flex flex-col transform transition-transform duration-300 ${
+                        menuOpen ? "translate-x-0" : "translate-x-full"
+                    }`}
+                >
+                    <div className="flex items-center justify-between px-5 h-[10vh] border-b border-black/10">
+                        <span className="font-semibold text-lg">Menu</span>
+                        <button
+                            onClick={() => setMenuOpen(false)}
+                            className="text-2xl cursor-pointer"
+                            aria-label="Close menu"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <nav className="flex flex-col px-3 py-4 gap-1">
+                        <button
+                            onClick={() => {
+                                setMenuOpen(false);
+                                handleCreatePostClick();
+                            }}
+                            className="text-left px-3 py-3 rounded-lg hover:bg-black/5 cursor-pointer"
+                        >
+                            Create Post
+                        </button>
+                        <button
+                            onClick={() => {
+                                setMenuOpen(false)
+                                handleMessageClick()
+                            }}
+                            className="text-left px-3 py-3 rounded-lg hover:bg-black/5 cursor-pointer"
+                        >
+                            Messages
+                        </button>
+                        <button
+                            onClick={() => {
+                                setMenuOpen(false);
+                                setProfileClicked(true);
+                            }}
+                            className="flex items-center gap-3 text-left px-3 py-3 rounded-lg hover:bg-black/5 cursor-pointer"
+                        >
+                            <img className="h-8 w-8 rounded-full object-cover" src={profileLogo} alt="" />
+                            Profile
+                        </button>
+                    </nav>
+
+                    <div className="mt-auto p-5 border-t border-black/10">
+                        <button
+                            onClick={logout}
+                            className="w-full cursor-pointer rounded-lg bg-[#D97757] px-6 py-2 font-medium text-white hover:bg-[#C4643F] transition-colors"
+                        >
+                            Log out
+                        </button>
+                    </div>
+                </aside>
+
+                {/* ---------- Profile popup ---------- */}
                 {profileClicked && (
-                    <div className="bg-black/50 w-[40vw] h-[70vh] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[20px] flex flex-col items-center justify-center text-white px-8 gap-4 z-50">
+                    <div className="bg-black/50 w-[90vw] md:w-[40vw] h-[70vh] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[20px] flex flex-col items-center justify-center text-white px-8 gap-4 z-50">
                         {loading && <p>Loading profile...</p>}
 
                         {!loading && error && <p className="text-red-300">{error}</p>}
@@ -131,11 +228,11 @@ function Dashboard() {
                                 </div>
                                 <div className="text-center">
                                     <p className="text-sm opacity-70">Email</p>
-                                    <p className="text-lg font-medium">{user.email}</p>
+                                    <p className="text-lg font-medium break-all">{user.email}</p>
                                 </div>
 
                                 <div
-                                    className="absolute text-white top-8 text-2xl left-[80%] cursor-pointer"
+                                    className="absolute text-white top-8 text-2xl right-6 md:right-auto md:left-[80%] cursor-pointer"
                                     onClick={() => setProfileClicked(false)}
                                 >
                                     X
@@ -152,7 +249,7 @@ function Dashboard() {
                     </div>
                 )}
 
-                {/* feed: this container scrolls, not the page */}
+                {/* ---------- Feed: this container scrolls, not the page ---------- */}
                 <div
                     ref={feedRef}
                     className="h-[90vh] w-screen relative z-0 overflow-y-auto px-4 py-4 flex flex-col gap-6"
