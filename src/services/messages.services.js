@@ -7,7 +7,6 @@ async function fetchFriends() {
 
 async function fetchMessages(friendId) {
     // if your route uses a URL param instead, use: api.get(`/message/fetch-messages/${friendId}`)
-    console.log("friendId in prams", friendId);
     const { data } = await api.get(`/chat/fetchMessages/${friendId}`);
     return data.data;
 }
@@ -22,9 +21,22 @@ async function addFriend(friendId) {
     return data.data;
 }
 
+async function uploadAttachment(file) {
+    const form = new FormData();
+    form.append("file", file);
+
+    const { data } = await api.post("/chat/upload", form, {
+        headers: { "Content-Type": undefined },
+    });
+    console.log("file url: ", data.data);
+    const url = data.data;
+    return { url };
+}
+
 export {
     fetchFriends,
     fetchMessages,
     searchUsersByUsername,
-    addFriend
-}
+    addFriend,
+    uploadAttachment,
+};

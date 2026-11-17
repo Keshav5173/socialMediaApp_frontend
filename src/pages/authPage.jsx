@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { CheckCircle } from "lucide-react";
 
 
 function AuthShell({ eyebrow, title, subtitle, children, footer }) {
@@ -173,20 +174,34 @@ export function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [showLoginDirection, setShowLoginDirection]= useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     try {
       const response = await register({ fullName, state, city, username, email, password });
       console.log("signing up", { fullName, username, email, password });
-      if(response.data){
-        navigate("/dashboard");
-      }
+      emptyForm();
+      setShowLoginDirection(true);
+      // if(response.data){
+      //   navigate("/dashboard");
+      // }
     } catch (err) {
       const message =
         err.response?.data?.message || "Something went wrong. Please try again.";
       setError(message);
     }
+  }
+
+  const emptyForm = ()=>{
+    setFullName("");
+    setState("");
+    setCity("");
+    setUsername("");
+    setEmail("");
+  }
+  const redirectToLogin = ()=>{
+    navigate("/login")
   }
 
   return (
@@ -256,6 +271,46 @@ export function Signup() {
 
       
     </AuthShell>
+
+
+    {showLoginDirection && (
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                w-[90%] max-w-md bg-white rounded-2xl shadow-xl
+                border border-gray-100 p-8 text-center">
+
+        {/* Success Icon */}
+        <div className="mx-auto mb-5 flex items-center justify-center
+                        w-16 h-16 rounded-full bg-green-100">
+          <CheckCircle className="w-9 h-9 text-green-600" />
+        </div>
+
+        {/* Heading */}
+        <h2 className="text-2xl font-bold text-gray-800 mb-3">
+          Account Created!
+        </h2>
+
+        {/* Description */}
+        <p className="text-gray-500 text-sm leading-relaxed mb-7">
+          Your account has been successfully created.
+          Please log in to access your account and get started.
+        </p>
+
+        {/* Login Button */}
+        <button
+          onClick={redirectToLogin}
+          className="w-full bg-green-600 hover:bg-green-700
+                    text-white font-semibold py-3 rounded-xl
+                    transition-all duration-200 shadow-md
+                    hover:shadow-lg active:scale-[0.98]"
+        >
+          Login to Your Account
+        </button>
+
+        <p className="text-xs text-gray-400 mt-5">
+          Thank you for joining us!
+        </p>
+      </div>
+    )}
     </>
 
   );

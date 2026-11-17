@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, UserPlus, Phone, Video, Send, X, MessageCircle, ArrowLeft } from 'lucide-react';
+import {
+    Search, UserPlus, Phone, Video, Send, X, MessageCircle, ArrowLeft,
+    Paperclip, Image as ImageIcon, Film, FileText,
+} from 'lucide-react';
 import { connectWebSocket } from '../services/ws.services.js';
 import * as messageApi from '../services/messages.services.js';
+
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 function Messages() {
     /* ---------------------------------------------------------------------- */
@@ -12,7 +17,7 @@ function Messages() {
     const [friends, setFriends] = useState([]);
 
     // Messages grouped by friend id.
-    // Shape: { [friendId]: [{ id, from: 'me' | 'friend', text, time }] }
+    // Shape: { [friendId]: [{ id, from: 'me' | 'friend', type, text, file, time }] }
     const [chats, setChats] = useState({});
 
     // Matching users shown in the Add friend box. Each item: { id, name, username }
@@ -27,6 +32,11 @@ function Messages() {
     const [userQuery, setUserQuery] = useState('');
     const [searching, setSearching] = useState(false);
 
+    // Attachment picked but not sent yet: { file, type, previewUrl }
+    const [attachment, setAttachment] = useState(null);
+    const [showAttachMenu, setShowAttachMenu] = useState(false);
+    const [uploading, setUploading] = useState(false);
+
     /* ---------------------------------------------------------------------- */
     /*  REFS                                                                  */
     /* ---------------------------------------------------------------------- */
@@ -38,6 +48,11 @@ function Messages() {
     // Same idea: lets the socket listener see the latest friend list
     const friendsRef = useRef([]);
 
+    // Hidden file inputs
+    const imageInputRef = useRef(null);
+    const videoInputRef = useRef(null);
+    const docInputRef = useRef(null);
+
     /* ---------------------------------------------------------------------- */
     /*  BACKEND FUNCTIONS                                                     */
     /* ---------------------------------------------------------------------- */
@@ -46,6 +61,21 @@ function Messages() {
         date
             ? new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
             : '';
+
+    const getFileType = (file) =>
+        file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document';
+
+    const formatSize = (bytes = 0) =>
+        bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+    // Text shown in the friend list for non-text messages
+    const previewFor = (type, text) => {
+        if (text) return text;
+        if (type === 'image') return '📷 Photo';
+        if (type === 'video') return '🎥 Video';
+        if (type === 'document') return '📄 Document';
+        return '';
+    };
 
     // Updates preview text + time in the friend list, bumps unread, moves chat to top
     const updateFriendPreview = (friendId, text, time, isIncoming) => {
@@ -90,30 +120,42 @@ function Messages() {
     };
 
     const addFriendList = async (user) => {
-    try {
-        await messageApi.addFriend(user.id);
-        await fetchFriendsList();
-    } catch (err) {
-        console.error(err);
-    }
-};
+        try {
+            await messageApi.addFriend(user.id);
+            await fetchFriendsList();
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
+    // payload: { type: 'text'|'image'|'video'|'document', text, file?: { url, name, size, mimeType } }
     // Sends through the socket; the backend saves it and replies via the ack callback
-    const sendMessage = async (text) => {
+    const sendMessage = async (payload) => {
         const friendId = activeId; // remember which chat this message belongs to
 
-        socketRef.current?.emit('sendMessage', { friendId, text }, (res) => {
+        socketRef.current?.emit('sendMessage', { friendId, ...payload }, (res) => {
             if (!res?.success) {
                 console.error(res?.message);
                 return;
             }
             const time = formatTime(res.data.time);
+            const type = res.data.type || payload.type;
 
             setChats((prev) => ({
                 ...prev,
-                [friendId]: [...(prev[friendId] || []), { id: res.data.id, from: 'me', text: res.data.text, time }],
+                [friendId]: [
+                    ...(prev[friendId] || []),
+                    {
+                        id: res.data.id,
+                        from: 'me',
+                        type,
+                        text: res.data.text,
+                        file: res.data.file || payload.file,
+                        time,
+                    },
+                ],
             }));
-            updateFriendPreview(friendId, res.data.text, time, false);
+            updateFriendPreview(friendId, previewFor(type, res.data.text), time, false);
         });
     };
 
@@ -172,6 +214,53 @@ function Messages() {
         </div>
     );
 
+    // Renders the image / video / document part of a message bubble
+    const renderAttachment = (m, mine) => {
+        if (!m.file) return null;
+
+        if (m.type === 'image') {
+            return (
+                <a href={m.file.url} target="_blank" rel="noreferrer">
+                    <img
+                        src={m.file.url}
+                        alt={m.file.name}
+                        loading="lazy"
+                        className="mb-1 max-h-72 w-full rounded-lg object-cover"
+                    />
+                </a>
+            );
+        }
+
+        if (m.type === 'video') {
+            return (
+                <video
+                    src={m.file.url}
+                    controls
+                    preload="metadata"
+                    className="mb-1 max-h-72 w-full rounded-lg bg-black"
+                />
+            );
+        }
+
+        return (
+            <a
+                href={m.file.url}
+                target="_blank"
+                rel="noreferrer"
+                download={m.file.name}
+                className={`mb-1 flex items-center gap-3 rounded-lg p-2 ${
+                    mine ? 'bg-white/15' : 'bg-black/5'
+                }`}
+            >
+                <FileText size={28} className="shrink-0" />
+                <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{m.file.name}</p>
+                    <p className="text-xs opacity-70">{formatSize(m.file.size)}</p>
+                </div>
+            </a>
+        );
+    };
+
     const openChat = (friend) => {
         setActiveId(friend.id);
         setFriends((prev) => prev.map((f) => (f.id === friend.id ? { ...f, unread: 0 } : f)));
@@ -188,11 +277,60 @@ function Messages() {
         closeAddModal();
     };
 
+    const clearAttachment = () => {
+        if (attachment?.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+        setAttachment(null);
+    };
+
+    const handleFilePick = (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = ''; // allows picking the same file again
+        setShowAttachMenu(false);
+        if (!file) return;
+        if (file.size > MAX_FILE_SIZE) {
+            alert('File is too large (max 25 MB).');
+            return;
+        }
+        if (attachment?.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+        setMessageText(''); // a file message carries no text
+        const type = getFileType(file);
+        setAttachment({
+            file,
+            type,
+            previewUrl: type === 'document' ? null : URL.createObjectURL(file),
+        });
+    };
+
     const handleSend = async () => {
         const value = messageText.trim();
-        if (!value || !activeId) return;
-        setMessageText('');
-        await sendMessage(value);
+        if ((!value && !attachment) || !activeId || uploading) return;
+
+        try {
+            let payload = { type: 'text', text: value };
+
+            if (attachment) {
+                setUploading(true);
+                const uploaded = await messageApi.uploadAttachment(attachment.file); // -> { url }
+                payload = {
+                    type: attachment.type,
+                    text: '', // files are sent without text
+                    file: {
+                        url: uploaded.url,
+                        name: attachment.file.name,
+                        size: attachment.file.size,
+                        mimeType: attachment.file.type,
+                    },
+                };
+            }
+
+            setMessageText('');
+            clearAttachment();
+            await sendMessage(payload);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setUploading(false);
+        }
     };
 
     /* ---------------------------------------------------------------------- */
@@ -223,18 +361,19 @@ function Messages() {
             }
 
             const time = formatTime(data.time);
+            const type = data.type || 'text';
 
             // add to that friend's chat
             setChats((prev) => ({
                 ...prev,
                 [data.friendId]: [
                     ...(prev[data.friendId] || []),
-                    { id: data.id, from: 'friend', text: data.text, time },
+                    { id: data.id, from: 'friend', type, text: data.text, file: data.file, time },
                 ],
             }));
 
             // update the friend list preview + unread badge
-            updateFriendPreview(data.friendId, data.text, time, true);
+            updateFriendPreview(data.friendId, previewFor(type, data.text), time, true);
         });
 
         return () => {
@@ -289,6 +428,15 @@ function Messages() {
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userQuery, showAdd]);
+
+    // Drop any pending attachment when switching chats
+    useEffect(() => {
+        setAttachment((prev) => {
+            if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+            return null;
+        });
+        setShowAttachMenu(false);
+    }, [activeId]);
 
     /* ---------------------------------------------------------------------- */
     /*  UI                                                                    */
@@ -431,9 +579,12 @@ function Messages() {
                                                         : 'rounded-bl-sm bg-white text-[#1E2420]'
                                                 }`}
                                             >
-                                                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                                                    {m.text}
-                                                </p>
+                                                {renderAttachment(m, mine)}
+                                                {m.text && (
+                                                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                                                        {m.text}
+                                                    </p>
+                                                )}
                                                 <p
                                                     className={`mt-1 text-right text-[11px] ${
                                                         mine ? 'text-white/70' : 'text-[#8A8579]'
@@ -448,11 +599,100 @@ function Messages() {
                                 <div ref={bottomRef} />
                             </div>
 
+                            {/* Preview of the picked file */}
+                            {attachment && (
+                                <div className="flex shrink-0 items-center gap-3 border-t border-[#E7E2D6] bg-[#FBF9F4] px-4 py-2">
+                                    {attachment.type === 'image' && (
+                                        <img
+                                            src={attachment.previewUrl}
+                                            alt=""
+                                            className="h-14 w-14 rounded-lg object-cover"
+                                        />
+                                    )}
+                                    {attachment.type === 'video' && (
+                                        <video
+                                            src={attachment.previewUrl}
+                                            className="h-14 w-14 rounded-lg bg-black object-cover"
+                                        />
+                                    )}
+                                    {attachment.type === 'document' && (
+                                        <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-[#E9E4D6]">
+                                            <FileText size={26} className="text-[#1F5F4A]" />
+                                        </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-medium text-[#1E2420]">
+                                            {attachment.file.name}
+                                        </p>
+                                        <p className="text-xs text-[#7A7568]">{formatSize(attachment.file.size)}</p>
+                                    </div>
+                                    <button
+                                        onClick={clearAttachment}
+                                        aria-label="Remove attachment"
+                                        className="rounded-full p-1.5 text-[#6B675B] hover:bg-[#EFEADD]"
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+                            )}
+
                             {/* Message input (pinned to bottom) */}
                             <footer className="flex shrink-0 items-end gap-2 border-t border-[#E7E2D6] bg-[#FBF9F4] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4">
+                                {/* Hidden file inputs */}
+                                <input ref={imageInputRef} type="file" accept="image/*" hidden onChange={handleFilePick} />
+                                <input ref={videoInputRef} type="file" accept="video/*" hidden onChange={handleFilePick} />
+                                <input
+                                    ref={docInputRef}
+                                    type="file"
+                                    hidden
+                                    onChange={handleFilePick}
+                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+                                />
+
+                                {/* Attach button + popup menu */}
+                                <div className="relative shrink-0">
+                                    <button
+                                        onClick={() => setShowAttachMenu((s) => !s)}
+                                        aria-label="Attach file"
+                                        className="flex h-10 w-10 items-center justify-center rounded-full text-[#4A4A42] transition hover:bg-[#EFEADD]"
+                                    >
+                                        <Paperclip size={20} />
+                                    </button>
+
+                                    {showAttachMenu && (
+                                        <>
+                                            <div
+                                                className="fixed inset-0 z-10"
+                                                onClick={() => setShowAttachMenu(false)}
+                                            />
+                                            <div className="absolute bottom-12 left-0 z-20 w-44 overflow-hidden rounded-xl border border-[#E7E2D6] bg-[#FBF9F4] py-1 shadow-lg">
+                                                <button
+                                                    onClick={() => imageInputRef.current?.click()}
+                                                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#1E2420] hover:bg-[#EFEADD]"
+                                                >
+                                                    <ImageIcon size={18} className="text-[#4A5D8F]" /> Photo
+                                                </button>
+                                                <button
+                                                    onClick={() => videoInputRef.current?.click()}
+                                                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#1E2420] hover:bg-[#EFEADD]"
+                                                >
+                                                    <Film size={18} className="text-[#8A4F7D]" /> Video
+                                                </button>
+                                                <button
+                                                    onClick={() => docInputRef.current?.click()}
+                                                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#1E2420] hover:bg-[#EFEADD]"
+                                                >
+                                                    <FileText size={18} className="text-[#B5651D]" /> Document
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+
                                 <textarea
                                     rows={1}
                                     value={messageText}
+                                    disabled={!!attachment}
                                     onChange={(e) => setMessageText(e.target.value)}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && !e.shiftKey) {
@@ -460,16 +700,20 @@ function Messages() {
                                             handleSend();
                                         }
                                     }}
-                                    placeholder="Type a message"
-                                    className="max-h-32 min-w-0 flex-1 resize-none rounded-2xl border border-[#D9D3C3] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#1F5F4A] focus:ring-1 focus:ring-[#1F5F4A]"
+                                    placeholder={attachment ? 'Remove the file to type a message' : 'Type a message'}
+                                    className="max-h-32 min-w-0 flex-1 resize-none rounded-2xl border border-[#D9D3C3] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#1F5F4A] focus:ring-1 focus:ring-[#1F5F4A] disabled:cursor-not-allowed disabled:bg-[#EFEADD] disabled:placeholder:text-[#8A8579]"
                                 />
                                 <button
                                     onClick={handleSend}
-                                    disabled={!messageText.trim()}
+                                    disabled={(!messageText.trim() && !attachment) || uploading}
                                     aria-label="Send message"
                                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1F5F4A] text-white transition hover:bg-[#184B3A] disabled:bg-[#C9C4B5]"
                                 >
-                                    <Send size={18} />
+                                    {uploading ? (
+                                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                                    ) : (
+                                        <Send size={18} />
+                                    )}
                                 </button>
                             </footer>
                         </>
