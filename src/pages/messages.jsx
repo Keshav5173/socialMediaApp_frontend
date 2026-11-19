@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { connectWebSocket } from '../services/ws.services.js';
 import * as messageApi from '../services/messages.services.js';
+import VideoCall from './videoCall.jsx';
+import useVideoCallStates from '../store/videoCall.store.js';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
@@ -36,6 +38,10 @@ function Messages() {
     const [attachment, setAttachment] = useState(null);
     const [showAttachMenu, setShowAttachMenu] = useState(false);
     const [uploading, setUploading] = useState(false);
+
+    // video/voice call
+    const [activeSocket, setActiveSocket] = useState(null);
+    const initiateCall = useVideoCallStates((s) => s.initiateCall); 
 
     /* ---------------------------------------------------------------------- */
     /*  REFS                                                                  */
@@ -158,6 +164,7 @@ function Messages() {
             updateFriendPreview(friendId, previewFor(type, res.data.text), time, false);
         });
     };
+
 
     /* ---------------------------------------------------------------------- */
     /*  DERIVED VALUES                                                        */
@@ -341,6 +348,8 @@ function Messages() {
     useEffect(() => {
         const socket = connectWebSocket();
         socketRef.current = socket;
+
+        setActiveSocket(socket);
 
         socket.on('connect', () => console.log('connected', socket.id));
         socket.on('connect_error', (err) => console.log('socket error:', err.message));
@@ -547,12 +556,14 @@ function Messages() {
                                 <button
                                     aria-label="Voice call"
                                     className="rounded-full p-2.5 text-[#4A4A42] transition hover:bg-[#EFEADD]"
+                                    
                                 >
                                     <Phone size={20} />
                                 </button>
                                 <button
                                     aria-label="Video call"
                                     className="rounded-full p-2.5 text-[#4A4A42] transition hover:bg-[#EFEADD]"
+                                    onClick={() => initiateCall?.(activeFriend.id, activeFriend.name, 'video')}
                                 >
                                     <Video size={20} />
                                 </button>
@@ -809,6 +820,7 @@ function Messages() {
                     </div>
                 </div>
             )}
+            <VideoCall socket={activeSocket} />
         </>
     );
 }
